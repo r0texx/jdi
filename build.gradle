@@ -1,0 +1,62 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.myjdiproject'
+version = '1.0'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(23)
+	}
+    withSourcesJar()
+}
+
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    manifest {
+        attributes(
+            'Class-Path': configurations.runtimeClasspath
+            	.collect { it.name }
+            	.join(' ')
+        )
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            // keep default src/main/resources AND add /resources
+            srcDir 'resources'
+            // (optional) ensure everything gets included
+            include '**/*'
+        }
+    }
+}
+
+tasks.register('exportArtifacts', Copy) {
+    dependsOn tasks.named('jar'), tasks.named('sourcesJar')
+
+    from(tasks.named('jar').flatMap { it.archiveFile })
+    from(tasks.named('sourcesJar').flatMap { it.archiveFile })
+
+    // put both JARs next to each other so the IDE can find the sources automatically
+    into "$rootDir/dist"
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from(components.java)  // picks up jar + sourcesJar
+            // Optional: control artifactId (defaults to project.name)
+            artifactId = 'jdi'
+        }
+    }
+    repositories {
+        mavenLocal()               // publish into ~/.m2/repository
+    }
+}
+
+tasks.assemble.configure { finalizedBy 'exportArtifacts' }

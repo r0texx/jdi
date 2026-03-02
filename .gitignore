@@ -1,0 +1,8 @@
+bin
+dist
+build
+.DS_Store
+.idea
+.gradle
+*.class
+local.properties
