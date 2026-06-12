@@ -1,6 +1,9 @@
 package com.myjdiproject.tools.jdi;
 
 import com.myjdiproject.jdi.*;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.*;
 
 class JDWP {
@@ -738,6 +741,116 @@ class JDWP {
                 }
                 ps.send();
                 return ps;
+            }
+        }
+
+        static class LoadRuleIndex {
+            static final int COMMAND = 26;
+
+            static final int MAGIC = 0x44415354;
+            static final int VERSION = 1;
+
+            static void process(VirtualMachineImpl vm, RuleIndexData index) throws JDWPException {
+                PacketStream ps = enqueueCommand(vm, index);
+                ps.waitForReply();
+            }
+
+            static PacketStream enqueueCommand(VirtualMachineImpl vm, RuleIndexData index) {
+                PacketStream ps = new PacketStream(vm, COMMAND_SET, COMMAND);
+                ps.writeByteArray(serialize(index));
+                ps.send();
+                return ps;
+            }
+
+            private static byte[] serialize(RuleIndexData index) {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(bytes);
+                try {
+                    out.writeInt(MAGIC);
+                    out.writeByte(VERSION);
+
+                    out.writeBoolean(index.classComplete);
+                    writeStrings(out, index.classExact);
+                    writeStrings(out, index.classPrefix);
+                    writeStrings(out, index.classSubstrings);
+                    writeStrings(out, index.methodNames);
+                    writeStrings(out, index.fieldNames);
+                    writeStrings(out, index.annotationDescriptors);
+
+                    out.writeBoolean(index.argComplete);
+                    out.writeInt(index.argRules.size());
+                    for (RuleIndexData.ArgRule rule : index.argRules) {
+                        writeString(out, rule.classKey);
+                        writeString(out, rule.method);
+                        out.writeInt(rule.predicates.size());
+                        for (RuleIndexData.Predicate predicate : rule.predicates) {
+                            writePredicate(out, predicate);
+                        }
+                    }
+                    out.flush();
+                } catch (IOException e) {
+                    throw new InternalException("Failed to serialize the DAST runtime index: " + e.getMessage());
+                }
+                return bytes.toByteArray();
+            }
+
+            private static void writePredicate(DataOutputStream out, RuleIndexData.Predicate predicate)
+                    throws IOException {
+                writeString(out, predicate.position);
+                int flags = 0;
+                if (predicate.regex) {
+                    flags |= 1;
+                }
+                if (predicate.number) {
+                    flags |= 2;
+                }
+                if (predicate.caseSensitive) {
+                    flags |= 4;
+                }
+                if (predicate.nullMatches) {
+                    flags |= 8;
+                }
+                out.writeByte(flags);
+                writeString(out, encodeArities(predicate.arities));
+                writeStrings(out, predicate.literals);
+            }
+
+            private static void writeStrings(DataOutputStream out, List<String> values) throws IOException {
+                out.writeInt(values.size());
+                for (String value : values) {
+                    writeString(out, value);
+                }
+            }
+
+            private static void writeString(DataOutputStream out, String value) throws IOException {
+                byte[] utf8 = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                out.writeInt(utf8.length);
+                out.write(utf8);
+            }
+
+            private static String encodeArities(Set<Integer> arities) {
+                if (arities == null || arities.isEmpty()) {
+                    return "*";
+                }
+                List<Integer> sorted = new ArrayList<>(new TreeSet<>(arities));
+                StringBuilder builder = new StringBuilder();
+                int i = 0;
+                while (i < sorted.size()) {
+                    int lo = sorted.get(i);
+                    int hi = lo;
+                    while (i + 1 < sorted.size() && sorted.get(i + 1) == hi + 1) {
+                        hi = sorted.get(++i);
+                    }
+                    if (builder.length() != 0) {
+                        builder.append(',');
+                    }
+                    builder.append(lo);
+                    if (hi != lo) {
+                        builder.append('-').append(hi);
+                    }
+                    i++;
+                }
+                return builder.toString();
             }
         }
     }

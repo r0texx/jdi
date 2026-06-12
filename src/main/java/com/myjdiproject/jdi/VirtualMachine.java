@@ -42,6 +42,9 @@ public interface VirtualMachine extends Mirror {
     List<ThreadReference> allThreads();
     void suspend();
     void resume();
+
+    void loadRuleIndex(RuleIndexData index);
+
     List<ThreadGroupReference> topLevelThreadGroups();
     EventQueue eventQueue();
     EventRequestManager eventRequestManager();
