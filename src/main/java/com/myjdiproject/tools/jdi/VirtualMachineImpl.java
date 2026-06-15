@@ -53,6 +53,7 @@ import com.myjdiproject.jdi.ObjectCollectedException;
 import com.myjdiproject.jdi.PathSearchingVirtualMachine;
 import com.myjdiproject.jdi.PrimitiveType;
 import com.myjdiproject.jdi.ReferenceType;
+import com.myjdiproject.jdi.RuleIndexData;
 import com.myjdiproject.jdi.ShortValue;
 import com.myjdiproject.jdi.StringReference;
 import com.myjdiproject.jdi.ThreadGroupReference;
@@ -436,6 +437,14 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
             throw exc.toJDIException();
         }
         target.stopListening();
+    }
+
+    public void loadRuleIndex(RuleIndexData index) {
+        try {
+            JDWP.VirtualMachine.LoadRuleIndex.process(vm, index);
+        } catch (JDWPException exc) {
+            throw exc.toJDIException();
+        }
     }
 
     public Process process() {
