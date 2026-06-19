@@ -25,11 +25,14 @@
 
 package com.myjdiproject.jdi.request;
 
+import java.util.Set;
+
 import com.myjdiproject.jdi.ReferenceType;
 
 public interface ClassPrepareRequest extends EventRequest {
     void addClassFilter(ReferenceType refType);
     void addClassFilter(String classPattern);
     void addClassExclusionFilter(String classPattern);
+    void addClassSetExclusionFilter(Set<String> classNames);
     void addSourceNameFilter(String sourceNamePattern);
 }

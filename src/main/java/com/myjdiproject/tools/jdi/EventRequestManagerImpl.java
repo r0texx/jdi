@@ -237,6 +237,18 @@ class EventRequestManagerImpl extends MirrorImpl implements EventRequestManager 
             filters.add(JDWP.EventRequest.Set.Modifier.ClassExclude.create(classPattern));
         }
 
+        public synchronized void addClassSetExclusionFilter(java.util.Set<String> classNames) {
+            if (isEnabled() || deleted) {
+                throw invalidState();
+            }
+            if (classNames == null) {
+                throw new NullPointerException();
+            }
+            if (!classNames.isEmpty()) {
+                filters.add(JDWP.EventRequest.Set.Modifier.ClassSetExclude.create(classNames));
+            }
+        }
+
         public synchronized void addInstanceFilter(ObjectReference instance) {
             validateMirror(instance);
             if (isEnabled() || deleted) {

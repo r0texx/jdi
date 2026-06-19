@@ -381,13 +381,13 @@ public class ThreadReferenceImpl extends ObjectReferenceImpl implements ThreadRe
         } catch (IndexOutOfBoundsException exc) {
            throw new InvalidStackFrameException("No more frames on the stack");
         }
-        MethodImpl meth = (MethodImpl)sf.location().method();
+        MethodImpl meth = (MethodImpl) sf.location().method();
         ValueImpl convertedValue  = ValueImpl.prepareForAssignment(returnValue, meth.getReturnValueContainer());
 
         try {
             JDWP.ThreadReference.ForceEarlyReturn.process(vm, this, convertedValue);
-        } catch (JDWPException exc) {
-            switch (exc.errorCode()) {
+        } catch (JDWPException e) {
+            switch (e.errorCode()) {
             case JDWP.Error.OPAQUE_FRAME:
                 if (isVirtual() && !meth.isNative()) {
                     throw new OpaqueFrameException();
@@ -399,7 +399,7 @@ public class ThreadReferenceImpl extends ObjectReferenceImpl implements ThreadRe
             case JDWP.Error.NO_MORE_FRAMES:
                 throw new InvalidStackFrameException("No more frames on the stack");
             default:
-                throw exc.toJDIException();
+                throw e.toJDIException();
             }
         }
     }

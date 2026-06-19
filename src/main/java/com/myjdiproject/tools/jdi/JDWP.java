@@ -2881,6 +2881,27 @@ class JDWP {
                     }
                 }
 
+                static class ClassSetExclude extends ModifierCommon {
+                    static final byte ALT_ID = 15;
+
+                    static Modifier create(java.util.Set<String> classNames) {
+                        return new Modifier(ALT_ID, new ClassSetExclude(classNames));
+                    }
+
+                    final java.util.Set<String> classNames;
+
+                    ClassSetExclude(java.util.Set<String> classNames) {
+                        this.classNames = new HashSet<>(classNames);
+                    }
+
+                    void write(PacketStream ps) {
+                        ps.writeInt(classNames.size());
+                        for (String className : classNames) {
+                            ps.writeString(className);
+                        }
+                    }
+                }
+
                 static class LocationOnly extends ModifierCommon {
                     static final byte ALT_ID = 7;
 
