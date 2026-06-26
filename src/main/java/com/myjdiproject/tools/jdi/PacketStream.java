@@ -25,7 +25,7 @@
 
 package com.myjdiproject.tools.jdi;
 
-import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,8 +53,21 @@ public class PacketStream {
     final VirtualMachineImpl vm;
     private int inCursor = 0;
     final Packet pkt;
-    private final ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
+    private byte[] dataBuf;
+    private int dataLen = 0;
     private boolean isCommitted = false;
+
+    private void ensure(int n) {
+        if (dataBuf == null) {
+            dataBuf = new byte[Math.max(32, n)];
+        } else if (dataLen + n > dataBuf.length) {
+            int cap = dataBuf.length;
+            do {
+                cap <<= 1;
+            } while (dataLen + n > cap);
+            dataBuf = Arrays.copyOf(dataBuf, cap);
+        }
+    }
 
     PacketStream(VirtualMachineImpl vm, int cmdSet, int cmd) {
         this.vm = vm;
@@ -67,6 +80,7 @@ public class PacketStream {
         this.vm = vm;
         this.pkt = pkt;
         this.isCommitted = true;
+        this.inCursor = pkt.dataStart;
     }
 
     int id() {
@@ -75,7 +89,7 @@ public class PacketStream {
 
     void send() {
         if (!isCommitted) {
-            pkt.data = dataStream.toByteArray();
+            pkt.data = (dataBuf == null) ? Packet.nullData : Arrays.copyOf(dataBuf, dataLen);
             vm.sendToTarget(pkt);
             isCommitted = true;
         }
@@ -87,6 +101,7 @@ public class PacketStream {
         }
 
         vm.waitForTargetReply(pkt);
+        inCursor = pkt.dataStart;
 
         if (pkt.errorCode != Packet.ReplyNoError) {
             throw new JDWPException(pkt.errorCode);
@@ -94,44 +109,45 @@ public class PacketStream {
     }
 
     void writeBoolean(boolean data) {
-        if (data) {
-            dataStream.write( 1 );
-        } else {
-            dataStream.write( 0 );
-        }
+        ensure(1);
+        dataBuf[dataLen++] = (byte) (data ? 1 : 0);
     }
 
     void writeByte(byte data) {
-        dataStream.write(data);
+        ensure(1);
+        dataBuf[dataLen++] = data;
     }
 
     void writeChar(char data) {
-        dataStream.write((byte) ((data >>> 8) & 0xFF));
-        dataStream.write((byte) ((data >>> 0) & 0xFF));
+        ensure(2);
+        dataBuf[dataLen++] = (byte) ((data >>> 8) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 0) & 0xFF);
     }
 
     void writeShort(short data) {
-        dataStream.write((byte) ((data >>> 8) & 0xFF));
-        dataStream.write((byte) ((data >>> 0) & 0xFF));
+        ensure(2);
+        dataBuf[dataLen++] = (byte) ((data >>> 8) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 0) & 0xFF);
     }
 
     void writeInt(int data) {
-        dataStream.write((byte) ((data >>> 24) & 0xFF));
-        dataStream.write((byte) ((data >>> 16) & 0xFF));
-        dataStream.write((byte) ((data >>> 8) & 0xFF));
-        dataStream.write((byte) ((data >>> 0) & 0xFF));
+        ensure(4);
+        dataBuf[dataLen++] = (byte) ((data >>> 24) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 16) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 8) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 0) & 0xFF);
     }
 
     void writeLong(long data) {
-        dataStream.write((byte) ((data >>> 56) & 0xFF) );
-        dataStream.write((byte) ((data >>> 48) & 0xFF) );
-        dataStream.write((byte) ((data >>> 40) & 0xFF) );
-        dataStream.write((byte) ((data >>> 32) & 0xFF) );
-
-        dataStream.write((byte) ((data >>> 24) & 0xFF) );
-        dataStream.write((byte) ((data >>> 16) & 0xFF) );
-        dataStream.write((byte) ((data >>> 8) & 0xFF) );
-        dataStream.write((byte) ((data >>> 0) & 0xFF) );
+        ensure(8);
+        dataBuf[dataLen++] = (byte) ((data >>> 56) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 48) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 40) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 32) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 24) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 16) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 8) & 0xFF);
+        dataBuf[dataLen++] = (byte) ((data >>> 0) & 0xFF);
     }
 
     void writeFloat(float data) {
@@ -188,7 +204,9 @@ public class PacketStream {
 
     void writeByteArray(byte[] data) {
         writeInt(data.length);
-        dataStream.write(data, 0, data.length);
+        ensure(data.length);
+        System.arraycopy(data, 0, dataBuf, dataLen, data.length);
+        dataLen += data.length;
     }
 
     void writeString(String string) {

@@ -28,6 +28,7 @@ package com.myjdiproject.tools.jdi;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Spliterator;
@@ -51,6 +52,7 @@ import com.myjdiproject.jdi.event.Event;
 import com.myjdiproject.jdi.event.EventIterator;
 import com.myjdiproject.jdi.event.EventSet;
 import com.myjdiproject.jdi.event.ExceptionEvent;
+import com.myjdiproject.jdi.event.IgnoredClassesEvent;
 import com.myjdiproject.jdi.event.MethodEntryEvent;
 import com.myjdiproject.jdi.event.MethodExitEvent;
 import com.myjdiproject.jdi.event.ModificationWatchpointEvent;
@@ -578,6 +580,36 @@ public class EventSetImpl extends ArrayList<Event> implements EventSet {
         @Override
         String eventName() {
             return "VMDeathEvent";
+        }
+    }
+
+    // SCANNER ADDED
+    static class IgnoredClassesEventImpl extends EventImpl implements IgnoredClassesEvent {
+        private final List<String> classNames;
+
+        IgnoredClassesEventImpl(PacketStream ps, VirtualMachineImpl vm) {
+            super(vm);
+            ps.readInt(); // requestID, always 0 (unsolicited client event)
+            int count = ps.readInt();
+            List<String> names = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                names.add(ps.readString());
+            }
+            this.classNames = names;
+        }
+
+        public List<String> classNames() {
+            return classNames;
+        }
+
+        @Override
+        byte eventKind() {
+            return JDWP.EventKind.IGNORED_CLASSES;
+        }
+
+        @Override
+        String eventName() {
+            return "IgnoredClassesEvent";
         }
     }
 

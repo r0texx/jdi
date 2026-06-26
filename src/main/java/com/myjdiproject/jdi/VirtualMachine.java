@@ -43,8 +43,6 @@ public interface VirtualMachine extends Mirror {
     void suspend();
     void resume();
 
-    void loadRuleIndex(RuleIndexData index);
-
     List<ThreadGroupReference> topLevelThreadGroups();
     EventQueue eventQueue();
     EventRequestManager eventRequestManager();
@@ -99,4 +97,6 @@ public interface VirtualMachine extends Mirror {
     void setStackTraceFilters(String[] filters);
     void setThreadNameFilters(String[] filters);
     void setSourceNameFilters(String[] filters);
+    List<ReferenceType> allClassesFiltered();
+    void loadRuleIndex(RuleIndexData index);
 }

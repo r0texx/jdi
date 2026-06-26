@@ -38,7 +38,7 @@ import com.myjdiproject.jdi.event.EventQueue;
 import com.myjdiproject.jdi.event.EventSet;
 
 public class TargetVM implements Runnable {
-    private final Map<String, Packet> waitingQueue = new HashMap<>(32,0.75f);
+    private final Map<Integer, Packet> waitingQueue = new HashMap<>(32,0.75f);
     private volatile boolean shouldListen = true;
     private final List<EventQueue> eventQueues = Collections.synchronizedList(new ArrayList<>(2));
     private final VirtualMachineImpl vm;
@@ -64,7 +64,6 @@ public class TargetVM implements Runnable {
     public void run() {
         try {
             Packet p = null, p2;
-            String idString;
 
             while (shouldListen) {
                 boolean done = false;
@@ -91,14 +90,9 @@ public class TargetVM implements Runnable {
                     handleVMCommand(p);
                 } else {
                     vm.state().notifyCommandComplete(p.id);
-                    idString = String.valueOf(p.id);
 
                     synchronized (waitingQueue) {
-                        p2 = waitingQueue.get(idString);
-
-                        if (p2 != null) {
-                            waitingQueue.remove(idString);
-                        }
+                        p2 = waitingQueue.remove(p.id);
                     }
 
                     if (p2 == null) {
@@ -107,6 +101,7 @@ public class TargetVM implements Runnable {
                     }
                     p2.errorCode = p.errorCode;
                     p2.data = p.data;
+                    p2.dataStart = p.dataStart;
                     p2.replied = true;
 
                     synchronized (p2) {
@@ -197,10 +192,8 @@ public class TargetVM implements Runnable {
     }
 
     void send(Packet packet) {
-        String id = String.valueOf(packet.id);
-
-        synchronized(waitingQueue) {
-            waitingQueue.put(id, packet);
+        synchronized (waitingQueue) {
+            waitingQueue.put(packet.id, packet);
         }
 
         try {
@@ -258,9 +251,9 @@ public class TargetVM implements Runnable {
         }
 
         public void run() {
-            while(true) {
+            while (true) {
                 int currentRequest;
-                synchronized(this) {
+                synchronized (this) {
                     while (controlRequest == 0) {
                         try {
                             wait();

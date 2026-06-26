@@ -25,6 +25,7 @@
 
 package com.myjdiproject.tools.jdi;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -45,7 +46,12 @@ class SocketConnection extends Connection {
     SocketConnection(Socket socket) throws IOException {
         this.socket = socket;
         socket.setTcpNoDelay(true);
-        socketInput = socket.getInputStream();
+        // The single reader thread is the sole consumer of every reply and event packet,
+        // so it gates all protocol throughput. Buffer the input: readPacket() reads the
+        // 4-byte length prefix one byte at a time, which on a raw socket stream is one
+        // syscall per byte -- buffering serves those (and the body, and following packets)
+        // from memory, refilled by occasional bulk reads.
+        socketInput = new BufferedInputStream(socket.getInputStream(), 64 * 1024);
         socketOutput = socket.getOutputStream();
     }
 

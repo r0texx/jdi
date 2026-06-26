@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import com.myjdiproject.jdi.BooleanValue;
@@ -87,8 +88,8 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
     final VirtualMachineManagerImpl vmManager;
     private final ThreadGroup threadGroupForJDI;
 
-    private Map<Long, ReferenceType> typesByID;
-    private Set<ReferenceType> typesBySignature;
+    private final Map<Long, ReferenceType> typesByID = new ConcurrentHashMap<>(50000);
+    private final Set<ReferenceType> typesBySignature = new HashSet<>();
     private boolean retrievedAllTypes = false;
 
     private Map<Long, ModuleReference> modulesByID;
@@ -244,6 +245,18 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
 
         synchronized (this) {
             return new ArrayList<>(typesBySignature);
+        }
+    }
+
+    // SCANNER ADDED
+    // Returns only the prepared classes that the target VM's RuleIndex class filter keeps;
+    // dropped classes arrive separately via a non-suspending IgnoredClassesEvent. Unlike
+    // allClasses() this is not cached and does not mark all types as retrieved.
+    public List<ReferenceType> allClassesFiltered() {
+        try {
+            return new ArrayList<>(JDWP.VirtualMachine.AllClassesFiltered.process(vm).classes);
+        } catch (JDWPException exc) {
+            throw exc.toJDIException();
         }
     }
 
@@ -585,8 +598,9 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
     }
 
     private synchronized ReferenceTypeImpl addReferenceType(long id, int tag, String signature) {
-        if (typesByID == null) {
-            initReferenceTypes();
+        ReferenceTypeImpl existing = (ReferenceTypeImpl) typesByID.get(id);
+        if (existing != null) {
+            return existing;
         }
         ReferenceTypeImpl type = switch (tag) {
             case JDWP.TypeTag.CLASS -> new ClassTypeImpl(vm, id);
@@ -606,10 +620,6 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
     }
 
     synchronized void removeReferenceType(String signature) {
-        if (typesByID == null) {
-            return;
-        }
-
         Iterator<ReferenceType> iter = typesBySignature.iterator();
         int matches = 0;
         while (iter.hasNext()) {
@@ -628,9 +638,6 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
     }
 
     private synchronized List<ReferenceType> findReferenceTypes(String signature) {
-        if (typesByID == null) {
-            return new ArrayList<>(0);
-        }
         Iterator<ReferenceType> iter = typesBySignature.iterator();
         List<ReferenceType> list = new ArrayList<>();
         while (iter.hasNext()) {
@@ -641,11 +648,6 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
             }
         }
         return list;
-    }
-
-    private void initReferenceTypes() {
-        typesByID = new HashMap<>(300);
-        typesBySignature = new HashSet<>();
     }
 
     ReferenceTypeImpl referenceType(long ref, byte tag) {
@@ -667,21 +669,15 @@ class VirtualMachineImpl extends MirrorImpl implements PathSearchingVirtualMachi
     ReferenceTypeImpl referenceType(long id, int tag, String signature) {
         if (id == 0) {
             return null;
-        } else {
-            ReferenceTypeImpl retType = null;
-            synchronized (this) {
-                if (typesByID != null) {
-                    retType = (ReferenceTypeImpl) typesByID.get(id);
-                }
-                if (retType == null) {
-                    retType = addReferenceType(id, tag, signature);
-                }
-                if (signature != null) {
-                    retType.setSignature(signature);
-                }
-            }
-            return retType;
         }
+        ReferenceTypeImpl retType = (ReferenceTypeImpl) typesByID.get(id);
+        if (retType == null) {
+            retType = addReferenceType(id, tag, signature);
+        }
+        if (signature != null) {
+            retType.setSignature(signature);
+        }
+        return retType;
     }
 
     private JDWP.VirtualMachine.Capabilities capabilities() {

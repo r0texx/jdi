@@ -110,6 +110,43 @@ class JDWP {
             }
         }
 
+        // SCANNER ADDED
+        // Like AllClasses, but the target VM runs each class through the RuleIndex class
+        // filter and returns only matching classes. Dropped classes arrive separately as a
+        // non-suspending IGNORED_CLASSES event. Reply shape is identical to AllClasses.
+        static class AllClassesFiltered {
+            static final int COMMAND = 27;
+
+            static AllClassesFiltered process(VirtualMachineImpl vm) throws JDWPException {
+                PacketStream ps = enqueueCommand(vm);
+                ps.waitForReply();
+                return new AllClassesFiltered(ps, vm);
+            }
+
+            static PacketStream enqueueCommand(VirtualMachineImpl vm) {
+                PacketStream ps = new PacketStream(vm, COMMAND_SET, COMMAND);
+                ps.send();
+                return ps;
+            }
+
+            final List<com.myjdiproject.jdi.ReferenceType> classes;
+
+            private AllClassesFiltered(PacketStream ps, VirtualMachineImpl vm) {
+                int classesCount = ps.readInt();
+                classes = new ArrayList<>(classesCount);
+                for (int i = 0; i < classesCount; i++) {
+                    byte refTypeTag = ps.readByte();
+                    long typeID = ps.readClassRef();
+                    String signature = ps.readString();
+                    int status = ps.readInt();
+
+                    ReferenceTypeImpl refType = vm.referenceType(typeID, refTypeTag, signature);
+                    refType.setStatus(status);
+                    classes.add(refType);
+                }
+            }
+        }
+
         static class AllThreads {
             static final int COMMAND = 4;
 
@@ -3397,6 +3434,7 @@ class JDWP {
                     case JDWP.EventKind.THREAD_START -> new EventSetImpl.ThreadStartEventImpl(ps, vm);
                     case JDWP.EventKind.VM_DEATH -> new EventSetImpl.VMDeathEventImpl(ps, vm);
                     case JDWP.EventKind.VM_START -> new EventSetImpl.VMStartEventImpl(ps, vm);
+                    case JDWP.EventKind.IGNORED_CLASSES -> new EventSetImpl.IgnoredClassesEventImpl(ps, vm);
                     default -> {
                         System.err.println("Ignoring event cmd " + eventKind + " from the VM");
                         yield null;
@@ -3494,6 +3532,7 @@ class JDWP {
         static final int VM_INIT = 90;
         static final int VM_DEATH = 99;
         static final int VM_DISCONNECTED = 100;
+        static final int IGNORED_CLASSES = 111;
     }
 
     static class ThreadStatus {

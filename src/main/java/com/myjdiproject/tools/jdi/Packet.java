@@ -26,13 +26,14 @@
 package com.myjdiproject.tools.jdi;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Packet {
     public static final short NoFlags = 0x0;
     public static final short Reply = 0x80;
     public static final short ReplyNoError = 0x0;
 
-    static int uID = 1;
+    static final AtomicInteger uID = new AtomicInteger(1);
     static final byte[] nullData = new byte[0];
 
     int id;
@@ -41,6 +42,7 @@ public class Packet {
     short cmd;
     short errorCode;
     byte[] data;
+    int dataStart = 0;
     volatile boolean replied = false;
 
     public byte[] toByteArray() {
@@ -101,8 +103,8 @@ public class Packet {
             p.errorCode = (short)((b9 << 8) + (b10 << 0));
         }
 
-        p.data = new byte[b.length - 11];
-        System.arraycopy(b, 11, p.data, 0, p.data.length);
+        p.data = b;
+        p.dataStart = 11;
         return p;
     }
 
@@ -112,7 +114,7 @@ public class Packet {
         data = nullData;
     }
 
-    private static synchronized int uniqID() {
-        return uID++;
+    private static int uniqID() {
+        return uID.getAndIncrement();
     }
 }
